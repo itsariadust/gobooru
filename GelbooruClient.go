@@ -12,7 +12,7 @@ import (
 )
 
 // Gelbooru-format struct
-type RawPost struct {
+type GelbooruPost struct {
 	ID         int64  `json:"id"`
 	FileUrl    string `json:"file_url"`
 	PreviewUrl string `json:"preview_url"`
@@ -106,7 +106,7 @@ func (c *GelbooruClient) SearchPosts(ctx context.Context, tags string, page int,
 
 	// Decode the wrapped posts; metadata and unused post fields are ignored.
 	var responseWrapper struct {
-		Posts []RawPost `json:"post"`
+		Posts []GelbooruPost `json:"post"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&responseWrapper); err != nil {
 		return nil, fmt.Errorf("failed to decode response from %s: %w", c.booruName, err)
@@ -129,4 +129,48 @@ func (c *GelbooruClient) SearchPosts(ctx context.Context, tags string, page int,
 	}
 
 	return posts, nil
+}
+
+func (c *GelbooruClient) Autocomplete(query string, limit int) ([]Autocomplete, error) {
+	parsedURL, err := url.Parse(c.baseURL)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create request: %w", err)
+	}
+
+	autoCompleteQuery := parsedURL.Query()
+	autoCompleteQuery.Set("page", "autocomplete2")
+	autoCompleteQuery.Set("term", query)
+	autoCompleteQuery.Set("type", "tag_query")
+	autoCompleteQuery.Set("limit", strconv.Itoa(limit))
+
+	// Encode query
+	parsedURL.RawQuery = autoCompleteQuery.Encode()
+
+	// Build new request
+	req, err := http.NewRequest(http.MethodGet, parsedURL.String(), nil)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create request: %w", err)
+	}
+
+	// Add header to prevent the API from blocking the library's requests
+	req.Header.Set("User-Agent", "GoBooruLib/1.0 (GoLang)")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("bad status code from %s: %d", c.booruName, resp.StatusCode)
+	}
+
+	var results []Autocomplete
+	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+		return nil, fmt.Errorf("failed to decode autocomplete response from %s: %w", c.booruName, err)
+	}
+
+	return results, nil
 }

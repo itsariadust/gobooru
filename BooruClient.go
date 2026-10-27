@@ -4,4 +4,5 @@ import "context"
 
 type BooruClient interface {
 	SearchPosts(ctx context.Context, tags string, page int, limit int) ([]Post, error)
+	Autocomplete(query string, limit int) ([]Autocomplete, error)
 }

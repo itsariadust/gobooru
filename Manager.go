@@ -31,3 +31,12 @@ func (m *Manager) Search(ctx context.Context, booruName string, tags string, pag
 	// Delegate the request to the specific client
 	return client.SearchPosts(ctx, tags, page, limit)
 }
+
+func (m *Manager) Autocomplete(booruName string, query string, limit int) ([]Autocomplete, error) {
+	client, exists := m.clients[booruName]
+	if !exists {
+		return nil, fmt.Errorf("unsupported or unregistered booru: %s", booruName)
+	}
+
+	return client.Autocomplete(query, limit)
+}
