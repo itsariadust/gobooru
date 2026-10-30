@@ -29,6 +29,14 @@ type Attributes struct {
 	Count  int64 `json:"count"`
 }
 
+type GelbooruAutocompleteItem struct {
+	Type      string `json:"type"`
+	Label     string `json:"label"`
+	Value     string `json:"value"`
+	PostCount int    `json:"post_count,string"`
+	Category  string `json:"category"`
+}
+
 // Client parameters
 type GelbooruClient struct {
 	baseURL    string
@@ -40,7 +48,7 @@ type GelbooruClient struct {
 
 // The Gelbooru client is for any imageboard that uses the Gelbooru Beta 0.2/0.2.5 system.
 // Anything else needs their own unique implementation (e.g Danbooru).
-func NewGelbooruClient(booruName, baseURL string, userID, apiKey string) *GelbooruClient {
+func NewGelbooruClient(booruName string, baseURL string, userID string, apiKey string) *GelbooruClient {
 	return &GelbooruClient{
 		baseURL:   baseURL,
 		booruName: booruName,
@@ -52,36 +60,75 @@ func NewGelbooruClient(booruName, baseURL string, userID, apiKey string) *Gelboo
 	}
 }
 
-// SearchPosts takes four parameters: context, tags (use camel case!), the page, and the limit.
-// No defaults are given. All will be given via configuration from applications.
-func (c *GelbooruClient) SearchPosts(ctx context.Context, tags string, page int, limit int) ([]Post, error) {
-	parsedURL, err := url.Parse(c.baseURL)
+type Search struct {
+	client *GelbooruClient
+	query  Query
+	page   int
+}
+
+type Query struct {
+	tags   string
+	sortBy string
+	limit  int
+}
+
+func (c *GelbooruClient) Search() *Search {
+	return &Search{
+		client: c,
+		page:   0,
+	}
+}
+
+func (s *Search) Tags(tags string) *Search {
+	s.query.tags = tags
+	return s
+}
+
+func (s *Search) SortBy(sort string) *Search {
+	s.query.sortBy = sort
+	return s
+}
+
+func (s *Search) Limit(limit int) *Search {
+	s.query.limit = limit
+	return s
+}
+
+func (s *Search) Get(ctx context.Context) ([]Post, error) {
+	parsedURL, err := url.Parse(s.client.baseURL)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create request: %w", err)
 	}
 
-	// Set query params
-	query := parsedURL.Query()
-	query.Set("page", "dapi")
-	query.Set("s", "post")
-	query.Set("q", "index")
-	query.Set("json", "1")
-	query.Set("tags", tags)
-	query.Set("limit", strconv.Itoa(limit))
+	fmt.Print(s.query.limit)
+
+	searchQuery := parsedURL.Query()
+	searchQuery.Set("page", "dapi")
+	searchQuery.Set("s", "post")
+	searchQuery.Set("q", "index")
+	searchQuery.Set("json", "1")
+	searchQuery.Set("tags", s.query.tags+" "+s.query.sortBy)
+
+	limit := s.query.limit
+	if limit == 0 {
+		limit = 100
+	}
+
+	searchQuery.Set("limit", strconv.Itoa(limit))
 
 	// Gelbooru uses 0-index pages
-	pid := max((page-1)*limit, 0)
-	query.Set("pid", strconv.Itoa(pid))
+	pid := max((s.page-1)*s.query.limit, 0)
+	searchQuery.Set("pid", strconv.Itoa(pid))
 
 	// Add the API credentials (very important)
-	if c.userID != "" && c.apiKey != "" {
-		query.Set("user_id", c.userID)
-		query.Set("api_key", c.apiKey)
+	if s.client.userID != "" && s.client.apiKey != "" {
+		searchQuery.Set("user_id", s.client.userID)
+		searchQuery.Set("api_key", s.client.apiKey)
 	}
 
 	// Encode query
-	parsedURL.RawQuery = query.Encode()
+	parsedURL.RawQuery = searchQuery.Encode()
 
 	// Build new request
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedURL.String(), nil)
@@ -94,22 +141,30 @@ func (c *GelbooruClient) SearchPosts(ctx context.Context, tags string, page int,
 	// Add header to prevent the API from blocking the library's requests
 	req.Header.Set("User-Agent", "GoBooruLib/1.0 (GoLang)")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := s.client.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("network error: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("bad status code from %s: %d", c.booruName, resp.StatusCode)
+		return nil, fmt.Errorf("bad status code from %s: %d", s.client.booruName, resp.StatusCode)
 	}
 
-	// Decode the wrapped posts; metadata and unused post fields are ignored.
+	// Keep the response available for both wrapped and top-level array formats.
+	var response json.RawMessage
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("failed to decode response from %s: %w", s.client.booruName, err)
+	}
+
 	var responseWrapper struct {
 		Posts []GelbooruPost `json:"post"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&responseWrapper); err != nil {
-		return nil, fmt.Errorf("failed to decode response from %s: %w", c.booruName, err)
+
+	if err := json.Unmarshal(response, &responseWrapper); err != nil {
+		if err := json.Unmarshal(response, &responseWrapper.Posts); err != nil {
+			return nil, fmt.Errorf("failed to decode response from %s: %w", s.client.booruName, err)
+		}
 	}
 
 	// Map raw posts into your clean, unified Post model
@@ -117,7 +172,7 @@ func (c *GelbooruClient) SearchPosts(ctx context.Context, tags string, page int,
 	for _, rp := range responseWrapper.Posts {
 		posts = append(posts, Post{
 			ID:          rp.ID,
-			SourceBooru: c.booruName,
+			SourceBooru: s.client.booruName,
 			FileUrl:     rp.FileUrl,
 			PreviewUrl:  rp.PreviewUrl,
 			Tags:        strings.Fields(rp.Tags), // Instantly splits space-separated tags into a slice
@@ -131,7 +186,7 @@ func (c *GelbooruClient) SearchPosts(ctx context.Context, tags string, page int,
 	return posts, nil
 }
 
-func (c *GelbooruClient) Autocomplete(query string, limit int) ([]Autocomplete, error) {
+func (c *GelbooruClient) Autocomplete(query string, limit int) ([]TagSuggestion, error) {
 	parsedURL, err := url.Parse(c.baseURL)
 
 	if err != nil {
@@ -167,10 +222,25 @@ func (c *GelbooruClient) Autocomplete(query string, limit int) ([]Autocomplete, 
 		return nil, fmt.Errorf("bad status code from %s: %d", c.booruName, resp.StatusCode)
 	}
 
-	var results []Autocomplete
+	var results []GelbooruAutocompleteItem
 	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
 		return nil, fmt.Errorf("failed to decode autocomplete response from %s: %w", c.booruName, err)
 	}
 
-	return results, nil
+	var suggestions []TagSuggestion
+	for _, rp := range results {
+		suggestions = append(suggestions, TagSuggestion{
+			Type:      rp.Type,
+			Label:     rp.Label,
+			Value:     rp.Value,
+			PostCount: rp.PostCount,
+			Category:  rp.Category,
+		})
+	}
+
+	return suggestions, nil
+}
+
+func (c *GelbooruClient) Download(tag string, minPage int, maxPage int) {
+
 }

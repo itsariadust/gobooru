@@ -1,6 +1,6 @@
 package goboorulib
 
-type Autocomplete struct {
+type TagSuggestion struct {
 	Type      string `json:"type"`
 	Label     string `json:"label"`
 	Value     string `json:"value"`
