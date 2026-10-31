@@ -47,8 +47,8 @@ type GelbooruClient struct {
 	userID     string
 }
 
-// The Gelbooru client is for any imageboard that uses the Gelbooru Beta 0.2/0.2.5 system.
-// Anything else needs their own unique implementation (e.g Danbooru).
+// NewGelbooruClient is for any imageboard that uses the Gelbooru Beta 0.2/0.2.5 system.
+// Anything else needs their own unique implementation (e.g. Danbooru).
 func NewGelbooruClient(booruName string, baseURL string, userID string, apiKey string) *GelbooruClient {
 	return &GelbooruClient{
 		baseURL:   baseURL,
@@ -99,7 +99,7 @@ func (s *Search) Get(ctx context.Context) ([]Post, error) {
 	parsedURL, err := url.Parse(s.client.baseURL)
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	fmt.Print(s.query.limit)
@@ -136,7 +136,7 @@ func (s *Search) Get(ctx context.Context) ([]Post, error) {
 
 	// Create request with context
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Add header to prevent the API from blocking the library's requests
@@ -191,7 +191,7 @@ func (c *GelbooruClient) Autocomplete(query string, limit int) ([]TagSuggestion,
 	parsedURL, err := url.Parse(c.baseURL)
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	autoCompleteQuery := parsedURL.Query()
@@ -207,7 +207,7 @@ func (c *GelbooruClient) Autocomplete(query string, limit int) ([]TagSuggestion,
 	req, err := http.NewRequest(http.MethodGet, parsedURL.String(), nil)
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Add header to prevent the API from blocking the library's requests
