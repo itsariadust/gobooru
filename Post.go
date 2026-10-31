@@ -11,4 +11,5 @@ type Post struct {
 	Rating      string   `json:"rating"`
 	Width       int      `json:"width"`
 	Height      int      `json:"height"`
+	MD5         string   `json:"md5"`
 }

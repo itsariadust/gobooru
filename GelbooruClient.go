@@ -21,6 +21,7 @@ type GelbooruPost struct {
 	Rating     string `json:"rating"`
 	Width      int    `json:"width"`
 	Height     int    `json:"height"`
+	MD5        string `json:"md5"`
 }
 
 type Attributes struct {
@@ -241,6 +242,12 @@ func (c *GelbooruClient) Autocomplete(query string, limit int) ([]TagSuggestion,
 	return suggestions, nil
 }
 
-func (c *GelbooruClient) Download(tag string, minPage int, maxPage int) {
+// Download basically takes a list of posts and pipes them through a worker pool for concurrency.
+func (c *GelbooruClient) Download(postsList []Post) {
+	wp := DownloadWorkerPool{
+		Posts:   postsList,
+		Workers: 10, // 10 just to be safe. I don't want anyone getting banned at all just from using this library.
+	}
 
+	wp.Run()
 }
