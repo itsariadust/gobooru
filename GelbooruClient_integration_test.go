@@ -84,3 +84,55 @@ func TestGelbooruAutocomplete(t *testing.T) {
 		t.Logf("Index: %d, Value: %s\n", index, value.Value)
 	}
 }
+
+func TestGelbooruDownload(t *testing.T) {
+	if os.Getenv("GELBOORU_LIVE_TEST") != "1" {
+		t.Skip("set GELBOORU_LIVE_TEST=1 to call the real API")
+	}
+
+	userID := os.Getenv("GELBOORU_USER_ID")
+	apiKey := os.Getenv("GELBOORU_API_KEY")
+	if userID == "" || apiKey == "" {
+		t.Fatal("GELBOORU_USER_ID and GELBOORU_API_KEY must be set")
+	}
+
+	client := NewGelbooruClient(
+		"gelbooru",
+		"https://gelbooru.com/index.php",
+		userID,
+		apiKey,
+	)
+
+	posts := []Post{
+		{
+			ID:          15222600,
+			SourceBooru: "gelbooru",
+			FileUrl:     "https://img4.gelbooru.com/images/b8/30/b8307f5573e2f5df449b96c39f4aa477.jpeg",
+			PreviewUrl:  "https://img4.gelbooru.com/thumbnails/b8/30/thumbnail_b8307f5573e2f5df449b96c39f4aa477.jpg",
+			Tags: []string{
+				"1girl",
+				"absurdres",
+				"fairy_miku_(project_voltage)",
+				"gen_1_pokemon",
+				"hatsune_miku",
+				"highres",
+				"ichizen_ryuu",
+				"jigglypuff",
+				"multicolored_hair",
+				"nintendo",
+				"pokemon",
+				"pokemon_(creature)",
+				"project_voltage",
+				"two-tone_hair",
+				"vocaloid",
+			},
+			Score:  1,
+			Rating: "general",
+			Width:  3508,
+			Height: 2480,
+			MD5:    "b8307f5573e2f5df449b96c39f4aa477",
+		},
+	}
+
+	client.Download(posts)
+}

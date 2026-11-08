@@ -1,6 +1,7 @@
 package gobooru
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
@@ -11,6 +12,8 @@ import (
 	"os"
 	"path"
 	"sync"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 /*
@@ -20,6 +23,7 @@ The worker pool accepts a list of [Post] which would be funneled into a channel 
 type DownloadWorkerPool struct {
 	Posts   []Post
 	Workers int
+	Client  *http.Client
 	channel chan Post
 	wg      sync.WaitGroup
 }
@@ -44,15 +48,28 @@ func (dwp *DownloadWorkerPool) downloadWorker() error {
 				return nil
 			}
 
-			out, err := os.Create(filename)
+			fmt.Print(task.FileUrl)
+
+			f, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0644)
 			if err != nil {
 				return fmt.Errorf("failed to create file: %w", err)
 			}
-			defer out.Close()
+			defer f.Close()
 
-			resp, err := http.Get(task.FileUrl)
+			req, err := http.NewRequest("GET", task.FileUrl, nil)
+			req.Header.Set("User-Agent", "GoBooruLib/1.0 (GoLang)")
+			// TODO: migrate this to struct
+			req.Header.Set("Referer", "https://gelbooru.com/")
 			if err != nil {
-				return fmt.Errorf("failed to send request: %w", err)
+				return fmt.Errorf("failed to create request: %w", err)
+			}
+			resp, err := dwp.Client.Do(req)
+			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					return fmt.Errorf("timed out waiting for response: %w", err)
+				}
+				// Another request error.
+				return fmt.Errorf("failed to download file: %w", err)
 			}
 			defer resp.Body.Close()
 
@@ -60,9 +77,15 @@ func (dwp *DownloadWorkerPool) downloadWorker() error {
 				return fmt.Errorf("bad status: %s", resp.Status)
 			}
 
-			if _, err := io.Copy(out, resp.Body); err != nil {
+			bar := progressbar.DefaultBytes(
+				resp.ContentLength,
+				"downloading",
+			)
+
+			if _, err := io.Copy(io.MultiWriter(f, bar), resp.Body); err != nil {
 				return fmt.Errorf("failed to save file payload: %w", err)
 			}
+
 			return nil
 		}()
 		if err != nil && workerErr == nil {
@@ -76,6 +99,7 @@ func (dwp *DownloadWorkerPool) downloadWorker() error {
 /*
 Run is the method to start up the workers based on the worker pool's settings.
 It spawns a number of workers based on [DownloadWorkerPool]'s Worker count.
+It also pushes the post list to the channel for the workers to do their job.
 */
 func (dwp *DownloadWorkerPool) Run() {
 	dwp.channel = make(chan Post, len(dwp.Posts))
@@ -95,12 +119,17 @@ func (dwp *DownloadWorkerPool) Run() {
 }
 
 /*
-md5Verification verifies the
+md5Verification checks for any duplicates via MD5 checking.
+It first gets the file. If it's not there then proceed to download.
+If it's there, check MD5 hashes between the local file and the remote to check if the local file is malformed.
+If malformed then delete that file and download.
+If it doesn't exist then it should download.
 */
 func md5Verification(path string, fileToDownloadHash string) (bool, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			fmt.Print("file does not exist")
 			return false, nil
 		}
 
@@ -129,6 +158,9 @@ func md5Verification(path string, fileToDownloadHash string) (bool, error) {
 	return true, nil
 }
 
+/*
+extractFilename does what it says on the tin.
+*/
 func extractFilename(rawURL string) string {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
