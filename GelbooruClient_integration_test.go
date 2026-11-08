@@ -1,4 +1,4 @@
-package goboorulib
+package gobooru
 
 import (
 	"context"

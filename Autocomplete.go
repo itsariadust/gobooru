@@ -1,4 +1,4 @@
-package goboorulib
+package gobooru
 
 type TagSuggestion struct {
 	Type      string `json:"type"`

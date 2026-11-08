@@ -1,4 +1,4 @@
-package goboorulib
+package gobooru
 
 import (
 	"context"
@@ -247,6 +247,7 @@ func (c *GelbooruClient) Download(postsList []Post) {
 	wp := DownloadWorkerPool{
 		Posts:   postsList,
 		Workers: 10, // 10 just to be safe. I don't want anyone getting banned at all just from using this library.
+		Client:  c.httpClient,
 	}
 
 	wp.Run()

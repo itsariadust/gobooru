@@ -1,4 +1,4 @@
-package goboorulib
+package gobooru
 
 // Library specific struct
 type Post struct {
