@@ -1,4 +1,4 @@
-module gobooru-lib
+module github.com/itsariadust/gobooru
 
 go 1.27.3
 
