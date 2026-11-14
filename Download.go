@@ -48,8 +48,6 @@ func (dwp *DownloadWorkerPool) downloadWorker() error {
 				return nil
 			}
 
-			fmt.Print(task.FileUrl)
-
 			f, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0644)
 			if err != nil {
 				return fmt.Errorf("failed to create file: %w", err)
@@ -129,7 +127,6 @@ func md5Verification(path string, fileToDownloadHash string) (bool, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			fmt.Print("file does not exist")
 			return false, nil
 		}
 

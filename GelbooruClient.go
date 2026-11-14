@@ -102,8 +102,6 @@ func (s *Search) Get(ctx context.Context) ([]Post, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	fmt.Print(s.query.limit)
-
 	searchQuery := parsedURL.Query()
 	searchQuery.Set("page", "dapi")
 	searchQuery.Set("s", "post")
