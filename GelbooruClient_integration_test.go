@@ -103,35 +103,12 @@ func TestGelbooruDownload(t *testing.T) {
 		apiKey,
 	)
 
-	posts := []Post{
-		{
-			ID:          15222600,
-			SourceBooru: "gelbooru",
-			FileUrl:     "https://img4.gelbooru.com/images/b8/30/b8307f5573e2f5df449b96c39f4aa477.jpeg",
-			PreviewUrl:  "https://img4.gelbooru.com/thumbnails/b8/30/thumbnail_b8307f5573e2f5df449b96c39f4aa477.jpg",
-			Tags: []string{
-				"1girl",
-				"absurdres",
-				"fairy_miku_(project_voltage)",
-				"gen_1_pokemon",
-				"hatsune_miku",
-				"highres",
-				"ichizen_ryuu",
-				"jigglypuff",
-				"multicolored_hair",
-				"nintendo",
-				"pokemon",
-				"pokemon_(creature)",
-				"project_voltage",
-				"two-tone_hair",
-				"vocaloid",
-			},
-			Score:  1,
-			Rating: "general",
-			Width:  3508,
-			Height: 2480,
-			MD5:    "b8307f5573e2f5df449b96c39f4aa477",
-		},
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	posts, err := client.Search().Tags("hatsune_miku").Limit(5).Get(ctx)
+	if err != nil {
+		t.Fatalf("live API request failed: %v", err)
 	}
 
 	client.Download(posts)
